@@ -36,12 +36,28 @@ scaler_path = os.path.join(MODELS_DIR, "scaler_baseline.pkl")
 scaler = joblib.load(scaler_path) if os.path.exists(scaler_path) else None
 
 # 🌞 MELANOMA MODEL (CNN Keras model + label encoder)
-melanoma_model_path = os.path.join(MODELS_DIR, "skin_lesion_model.keras")
-melanoma_labels_path = os.path.join(MODELS_DIR, "skin_lesion_labels.joblib")
+melanoma_model = None
+melanoma_labels = None
 
-melanoma_model = tf.keras.models.load_model(melanoma_model_path, compile=False) if os.path.exists(melanoma_model_path) else None
-melanoma_labels = joblib.load(melanoma_labels_path) if os.path.exists(melanoma_labels_path) else None
+try:
+    if os.path.exists(os.path.join(MODELS_DIR, "skin_lesion_model.keras")):
+        melanoma_model = tf.keras.models.load_model(
+            os.path.join(MODELS_DIR, "skin_lesion_model.keras"),
+            compile=False
+        )
+    elif os.path.exists(os.path.join(MODELS_DIR, "skin_lesion_efficientnet.h5")):
+        melanoma_model = tf.keras.models.load_model(
+            os.path.join(MODELS_DIR, "skin_lesion_efficientnet.h5"),
+            compile=False
+        )
 
+    # Load labels
+    labels_path = os.path.join(MODELS_DIR, "skin_lesion_labels.joblib")
+    if os.path.exists(labels_path):
+        melanoma_labels = joblib.load(labels_path)
+
+except Exception as e:
+    print("⚠️ Warning: Could not load melanoma model ->", e)
 
 # === Feature Schemas ===
 DIABETES_FEATURES = [
