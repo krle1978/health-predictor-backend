@@ -83,8 +83,8 @@ def predict_heart():
     try:
         data = request.get_json(force=True)
         X = _extract_ordered_features(data, HEART_FEATURES)
-        # Pretvori prazne vrednosti u nulu (ili bilo koji default)
-        X = [[float(v) if v != "" else 0.0 for v in row] for row in X]
+        X = np.array([[float(v) if v != "" else 0.0 for v in X[0]]], dtype=float)  # 🧠 NumPy array
+
         prob = _to_prob(heart_model.predict(X, verbose=0))
         label = "Positive" if prob >= 0.5 else "Negative"
         return jsonify({
