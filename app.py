@@ -3,7 +3,6 @@
 # =========================================
 
 import os
-import io
 import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -11,32 +10,37 @@ import tensorflow as tf
 import joblib
 from tensorflow.keras.preprocessing import image as keras_image
 
+# === APP CONFIG ===
 app = Flask(__name__)
 CORS(app)
+
+# === Disable GPU (Render nema CUDA) ===
+tf.config.set_visible_devices([], 'GPU')
 
 # === Paths ===
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 
 # === Load Models ===
 
-# ✅ Heart model (Keras format ONLY)
+# 💓 HEART MODEL (8 feature Keras model)
 heart_model_path = os.path.join(MODELS_DIR, "model_heart_8f.keras")
 heart_model = tf.keras.models.load_model(heart_model_path, compile=False)
+heart_model.run_eagerly = False
 
-# ✅ Diabetes model (.keras + scaler)
+# 💉 DIABETES MODEL (.keras + optional scaler)
 diabetes_model_path = os.path.join(MODELS_DIR, "model_baseline_dijabetes.keras")
 diabetes_model = tf.keras.models.load_model(diabetes_model_path, compile=False)
+diabetes_model.run_eagerly = False
 
 scaler_path = os.path.join(MODELS_DIR, "scaler_baseline.pkl")
 scaler = joblib.load(scaler_path) if os.path.exists(scaler_path) else None
 
+# 🌞 MELANOMA MODEL (CNN Keras model + label encoder)
+melanoma_model_path = os.path.join(MODELS_DIR, "skin_lesion_model.keras")
+melanoma_labels_path = os.path.join(MODELS_DIR, "skin_lesion_labels.joblib")
 
-# ✅ Melanoma model - privremeno isključen zbog TF kompatibilnosti
-melanoma_model = None  
-
-# ✅ Scaler (optional)
-scaler_path = os.path.join(MODELS_DIR, "scaler_baseline.pkl")
-scaler = joblib.load(scaler_path) if os.path.exists(scaler_path) else None
+melanoma_model = tf.keras.models.load_model(melanoma_model_path, compile=False) if os.path.exists(melanoma_model_path) else None
+melanoma_labels = joblib.load(melanoma_labels_path) if os.path.exists(melanoma_labels_path) else None
 
 
 # === Feature Schemas ===
@@ -62,8 +66,8 @@ def _extract_ordered_features(data: dict, feature_list: list):
     for feature in feature_list:
         if feature not in data:
             raise ValueError(f"Missing feature: {feature}")
-        vals.append(float(data[feature]))
-    return np.array(vals).reshape(1, -1)
+        vals.append(float(data[feature]) if str(data[feature]).strip() != "" else 0.0)
+    return np.array([vals], dtype=float)
 
 
 # === HEALTH CHECK ===
@@ -82,28 +86,20 @@ def health():
 def predict_heart():
     try:
         data = request.get_json(force=True)
-
-        # 🔹 Učitaj ulazne podatke po tačnom redosledu
         X = _extract_ordered_features(data, HEART_FEATURES)
 
-        # 🔹 Pretvori sve vrednosti u float i napravi NumPy niz
-        X = np.array([[float(v) if v != "" else 0.0 for v in X[0]]], dtype=float)
-
-        # 🔹 Predikcija
         prob = _to_prob(heart_model.predict(X, verbose=0))
         label = "Positive" if prob >= 0.5 else "Negative"
 
-        # 🔹 Vraćanje rezultata u JSON formatu
         return jsonify({
             "prediction": label,
             "confidence": round(prob, 3)
         })
-
     except Exception as e:
-        # Ako nešto pođe po zlu — pošalji opis greške
         return jsonify({"error": str(e)}), 400
 
-# === PREDICT DIABETES (active) ===
+
+# === PREDICT DIABETES ===
 @app.route("/predict/diabetes", methods=["POST"])
 def predict_diabetes():
     try:
@@ -123,13 +119,40 @@ def predict_diabetes():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# === MELANOMA DISABLED (until Keras version ready) ===
+
+# === PREDICT MELANOMA ===
 @app.route("/predict/melanoma", methods=["POST"])
 def predict_melanoma():
-    return jsonify({"error": "Melanoma model unavailable"}), 501
+    try:
+        if melanoma_model is None or melanoma_labels is None:
+            return jsonify({"error": "Melanoma model unavailable"}), 501
+
+        if 'file' not in request.files:
+            return jsonify({"error": "No image uploaded"}), 400
+
+        file = request.files['file']
+        img_bytes = file.read()
+        img = keras_image.load_img(
+            io.BytesIO(img_bytes),
+            target_size=(224, 224)
+        )
+        img_array = keras_image.img_to_array(img)
+        img_array = np.expand_dims(img_array, axis=0) / 255.0
+
+        preds = melanoma_model.predict(img_array, verbose=0)
+        class_idx = int(np.argmax(preds))
+        label = melanoma_labels[class_idx]
+        confidence = float(np.max(preds))
+
+        return jsonify({
+            "prediction": label,
+            "confidence": round(confidence, 3)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 
-# === STROKE PLACEHOLDER ===
+# === PREDICT STROKE (placeholder) ===
 @app.route("/predict/stroke", methods=["POST"])
 def predict_stroke():
     return jsonify({"error": "Stroke model not implemented yet"}), 501
