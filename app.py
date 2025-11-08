@@ -82,16 +82,25 @@ def health():
 def predict_heart():
     try:
         data = request.get_json(force=True)
-        X = _extract_ordered_features(data, HEART_FEATURES)
-        X = np.array([[float(v) if v != "" else 0.0 for v in X[0]]], dtype=float)  # 🧠 NumPy array
 
+        # 🔹 Učitaj ulazne podatke po tačnom redosledu
+        X = _extract_ordered_features(data, HEART_FEATURES)
+
+        # 🔹 Pretvori sve vrednosti u float i napravi NumPy niz
+        X = np.array([[float(v) if v != "" else 0.0 for v in X[0]]], dtype=float)
+
+        # 🔹 Predikcija
         prob = _to_prob(heart_model.predict(X, verbose=0))
         label = "Positive" if prob >= 0.5 else "Negative"
+
+        # 🔹 Vraćanje rezultata u JSON formatu
         return jsonify({
             "prediction": label,
             "confidence": round(prob, 3)
         })
+
     except Exception as e:
+        # Ako nešto pođe po zlu — pošalji opis greške
         return jsonify({"error": str(e)}), 400
 
 # === PREDICT DIABETES (active) ===
