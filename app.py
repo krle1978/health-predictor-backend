@@ -42,7 +42,7 @@ def safe_load_model(path, name):
 heart_model = safe_load_model(os.path.join(MODELS_DIR, "model_heart_8f.keras"), "Heart")
 diabetes_model = safe_load_model(os.path.join(MODELS_DIR, "model_baseline_dijabetes.keras"), "Diabetes")
 stroke_model = safe_load_model(os.path.join(MODELS_DIR, "model_stroke_v2.keras"), "Stroke")
-melanoma_model = safe_load_model(os.path.join(MODELS_DIR, "skin_lesion_model.keras"), "Melanoma")
+melanoma_model = safe_load_model(os.path.join(MODELS_DIR, "skin_lesion_model_v3.keras"), "Melanoma")
 
 # === Load scaler and labels ===
 scaler = None
@@ -172,19 +172,40 @@ def predict_melanoma():
             return jsonify({"error": "No image file provided"}), 400
 
         file = request.files["file"]
+
+        # 🔹 Load and preprocess image
         img = keras_image.load_img(file, target_size=(160, 160))
         img_array = keras_image.img_to_array(img)
-        img_array = np.expand_dims(img_array, axis=0) / 255.0
 
-        predictions = melanoma_model.predict(img_array, verbose=0)[0]
-        top_idx = np.argmax(predictions)
+        # 🔹 Ensure shape (1,160,160,3)
+        if img_array.ndim == 3:
+            img_array = np.expand_dims(img_array, axis=0)
+        elif img_array.ndim == 4 and img_array.shape[0] != 1:
+            img_array = img_array[:1]  # uzmi samo prvu sliku ako ih je više
+
+        img_array = img_array.astype("float32") / 255.0
+
+        # 🔹 Predict safely
+        preds = melanoma_model.predict(img_array, verbose=0)
+        if isinstance(preds, (list, tuple)):
+            preds = preds[0]  # uzmi prvi izlaz ako ih ima više
+
+        preds = np.ravel(preds)
+        top_idx = int(np.argmax(preds))
+        confidence = float(preds[top_idx])
         label = melanoma_labels[top_idx] if melanoma_labels else str(top_idx)
-        confidence = float(predictions[top_idx])
 
-        return jsonify({"prediction": label, "confidence": round(confidence, 3)})
+        print(f"📸 Melanoma input shape: {img_array.shape}, top={top_idx}, conf={confidence:.3f}")
+
+        return jsonify({
+            "prediction": label,
+            "confidence": round(confidence, 3)
+        })
+
     except Exception as e:
+        import traceback
+        print("⚠️ Melanoma prediction error:", traceback.format_exc())
         return jsonify({"error": str(e)}), 400
-
 
 # === MAIN ENTRY ===
 if __name__ == "__main__":
