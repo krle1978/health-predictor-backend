@@ -1,8 +1,10 @@
 flask
 flask-cors
-tensorflow
+tensorflow==2.17.1
 numpy
 pillow
 joblib
 scikit-learn
 gunicorn
+xgboost
+pandas

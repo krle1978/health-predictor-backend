@@ -42,7 +42,7 @@ def safe_load_model(path, name):
 heart_model = safe_load_model(os.path.join(MODELS_DIR, "model_heart_8f.keras"), "Heart")
 diabetes_model = safe_load_model(os.path.join(MODELS_DIR, "model_baseline_dijabetes.keras"), "Diabetes")
 stroke_model = safe_load_model(os.path.join(MODELS_DIR, "model_stroke_v2.keras"), "Stroke")
-melanoma_model = safe_load_model(os.path.join(MODELS_DIR, "skin_lesion_model_v3.keras"), "Melanoma")
+melanoma_model = safe_load_model(os.path.join(MODELS_DIR, "skin_lesion_model_v3.h5"), "Melanoma")
 
 # === Load scaler and labels ===
 scaler = None
