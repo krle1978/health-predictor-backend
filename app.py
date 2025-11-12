@@ -1,5 +1,5 @@
 # =========================================
-# 🧠 HEALTH PREDICTOR BACKEND – FINAL VERSION
+# 🧠 HEALTH PREDICTOR BACKEND – FINAL VERSION (CORS FIXED)
 # =========================================
 # Supports: Heart, Diabetes, Stroke, Melanoma
 # =========================================
@@ -14,7 +14,18 @@ from tensorflow.keras.preprocessing import image as keras_image
 
 # === APP CONFIG ===
 app = Flask(__name__)
-CORS(app)
+
+# ✅ CORS – Dozvoli pristup samo Vercel frontendu i lokalnom razvoju
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "https://health-predictor-platform.vercel.app",  # tvoj Vercel frontend
+            "http://localhost:3000"  # lokalni dev
+        ],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # === Disable GPU (Render uses CPU only) ===
 tf.config.set_visible_devices([], 'GPU')
@@ -36,7 +47,6 @@ def safe_load_model(path, name):
     except Exception as e:
         print(f"❌ Failed to load {name} model -> {e}")
         return None
-
 
 # === LOAD MODELS ===
 heart_model = safe_load_model(os.path.join(MODELS_DIR, "model_heart_8f.keras"), "Heart")
@@ -63,7 +73,6 @@ if os.path.exists(labels_path):
     except Exception as e:
         print(f"⚠️ Failed to load melanoma labels: {e}")
 
-
 # === FEATURE SCHEMAS ===
 DIABETES_FEATURES = [
     "HighChol", "BMI", "Smoker", "HeartDiseaseorAttack",
@@ -78,12 +87,10 @@ STROKE_FEATURES = [
     "WorkType", "ResidenceType"
 ]
 
-
 # === HELPERS ===
 def _to_prob(y):
     """Convert model output to single float probability."""
     return float(np.ravel(y)[0])
-
 
 def _extract_ordered_features(data: dict, feature_list: list):
     """Extracts and orders features safely from JSON body."""
@@ -93,9 +100,7 @@ def _extract_ordered_features(data: dict, feature_list: list):
         vals.append(float(val) if val != "" else 0.0)
     return np.array([vals], dtype=float)
 
-
 # === ROUTES ===
-
 @app.route("/", methods=["GET"])
 def root():
     """Root endpoint showing which models are loaded."""
@@ -109,11 +114,9 @@ def root():
         }
     }), 200
 
-
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
-
 
 # === HEART PREDICTION ===
 @app.route("/predict/heart", methods=["POST"])
@@ -128,7 +131,6 @@ def predict_heart():
         return jsonify({"prediction": label, "confidence": round(prob, 3)})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-
 
 # === DIABETES PREDICTION ===
 @app.route("/predict/diabetes", methods=["POST"])
@@ -146,7 +148,6 @@ def predict_diabetes():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-
 # === STROKE PREDICTION ===
 @app.route("/predict/stroke", methods=["POST"])
 def predict_stroke():
@@ -161,7 +162,6 @@ def predict_stroke():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-
 # === MELANOMA PREDICTION ===
 @app.route("/predict/melanoma", methods=["POST"])
 def predict_melanoma():
@@ -172,23 +172,19 @@ def predict_melanoma():
             return jsonify({"error": "No image file provided"}), 400
 
         file = request.files["file"]
-
-        # 🔹 Load and preprocess image
         img = keras_image.load_img(file, target_size=(160, 160))
         img_array = keras_image.img_to_array(img)
 
-        # 🔹 Ensure shape (1,160,160,3)
         if img_array.ndim == 3:
             img_array = np.expand_dims(img_array, axis=0)
         elif img_array.ndim == 4 and img_array.shape[0] != 1:
-            img_array = img_array[:1]  # uzmi samo prvu sliku ako ih je više
+            img_array = img_array[:1]
 
         img_array = img_array.astype("float32") / 255.0
 
-        # 🔹 Predict safely
         preds = melanoma_model.predict(img_array, verbose=0)
         if isinstance(preds, (list, tuple)):
-            preds = preds[0]  # uzmi prvi izlaz ako ih ima više
+            preds = preds[0]
 
         preds = np.ravel(preds)
         top_idx = int(np.argmax(preds))
@@ -196,11 +192,7 @@ def predict_melanoma():
         label = melanoma_labels[top_idx] if melanoma_labels else str(top_idx)
 
         print(f"📸 Melanoma input shape: {img_array.shape}, top={top_idx}, conf={confidence:.3f}")
-
-        return jsonify({
-            "prediction": label,
-            "confidence": round(confidence, 3)
-        })
+        return jsonify({"prediction": label, "confidence": round(confidence, 3)})
 
     except Exception as e:
         import traceback
